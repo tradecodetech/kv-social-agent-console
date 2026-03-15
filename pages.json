@@ -1,0 +1,43 @@
+{
+  "default_schedule": {
+    "posts_per_run": 1
+  },
+  "pages": [
+    {
+      "client_name": "Keen Visions Trading",
+      "page_id": "941966405661933",
+      "page_token": "EAARghOXjjywBQxN3Tu4i8J1z3PwMnu9oBReLrRcecnGK3eoaRbNnSOe4xrIXsPCbdHO3ryauZBdHFvXKppj5UJWWjf84dsWB3ZBFKiytz3lZCYXLATnGnHoEdGFihSXyT5Ip1wyZClTAsznmdZCZB2u13WR3D5NosDw34MhWTpZAQua1VAGYPfeTDZBHK4oU4OCJirzdjtd6MMiZBga1rFK0F",
+      "brand": { "industry": "trading", "tone": "operator" },
+      "features": { "visuals": true, "weather": false, "cta": false, "auto_posting": true, "lead_capture": true },
+      "lead_keywords": ["info", "INFO", "yes", "YES", "join", "JOIN", "details", "how", "interested"],
+      "cadence": { "posts_per_run": 1, "days": ["Mon", "Wed", "Fri"] },
+      "mode_weights": { "discipline": 60, "trading": 40 },
+      "style_tags": ["operator", "visuals-enabled", "no-cta"],
+      "posts_per_run": 1
+    },
+    {
+      "client_name": "TradeCodeTech",
+      "page_id": "607790205752662",
+      "page_token": "EAARghOXjjywBQ6ZBpbAw13nMnwr8GPpzmgFZCHuERlKCX0NRlJG2qjLeZBcXEaZAIwPircQRepgXE7UjQbq9NJbyFEkdmOzC3RVcI1me4yf0ycga6hcXhpFu3t4GbYBpIVwCIdiyWsZCRhVWGDsg5egZCvJtmjeXGcLvWxcOVMBTSc5t5Mk3ZAZClz7L3GDirQkuNLlc7OpZCz1G9qC6lgNAO",
+      "brand": { "industry": "systems", "tone": "automation" },
+      "features": { "visuals": true, "weather": false, "cta": false, "auto_posting": true, "lead_capture": true },
+      "lead_keywords": ["info", "INFO", "yes", "YES", "join", "JOIN", "build", "automate", "interested", "details"],
+      "cadence": { "posts_per_run": 1, "days": ["Mon", "Wed", "Fri"] },
+      "mode_weights": { "discipline": 70, "trading": 30 },
+      "style_tags": ["automation", "visuals-enabled", "no-cta"],
+      "posts_per_run": 1
+    },
+    {
+      "client_name": "Contee's Lawn Care",
+      "page_id": "684298664768779",
+      "page_token": "EAARghOXjjywBQ9tsNTTXIf53TtFRE1Q9yjEHS7AVzmRNAql8jeelCRkgucPz4NiwRFBhe2ZAF6eREgLaweHZB4u8N7ZATIGVO6StYOAZCmUpKVroPO0UJn6kMAeJ7lCMqX1ZAcquwnxe8JaIPQhFeImlGjrkRuPoGZCG0J4CCnNsAB6yxdtV7udyaxBwQg7RWZAkRzerEzBkRZBzejehrVBZB",
+      "brand": { "industry": "lawn", "tone": "local-professional" },
+      "features": { "visuals": true, "weather": false, "cta": true, "auto_posting": true, "lead_capture": true },
+      "lead_keywords": ["info", "INFO", "yes", "YES", "quote", "QUOTE", "price", "interested", "how much", "lawn"],
+      "cadence": { "posts_per_run": 1, "days": ["Tue", "Thu", "Sat"] },
+      "mode_weights": { "education": 70, "promotion": 30 },
+      "style_tags": ["local-professional", "visuals-enabled", "cta-allowed"],
+      "posts_per_run": 1
+    }
+  ]
+}
