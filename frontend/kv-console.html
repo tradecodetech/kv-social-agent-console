@@ -1,0 +1,1711 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>KV Systems — Social Agent Console</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://unpkg.com/react@18/umd/react.development.js"></script>
+<script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+<style>
+  body { background:#0f172a; color:#e2e8f0; font-family:'Inter',system-ui,sans-serif; }
+  ::-webkit-scrollbar { width:6px; height:6px; }
+  ::-webkit-scrollbar-track { background:#1e293b; }
+  ::-webkit-scrollbar-thumb { background:#334155; border-radius:3px; }
+  .fade-in { animation: fadeIn .25s ease; }
+  @keyframes fadeIn { from{opacity:0;transform:translateY(6px)} to{opacity:1;transform:none} }
+  .spin { animation: spin 1s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  textarea { resize:vertical; }
+</style>
+</head>
+<body>
+<div id="root"></div>
+
+<script type="text/babel">
+const { useState, useEffect, useCallback, useRef } = React;
+
+const API = 'http://localhost:7861';
+const WL_KEY = 'kv_wl_v1';
+const ANTHROPIC_KEY_STORAGE = 'kv_anthropic_key';
+const DEFAULT_WL = { name:'KV Systems & Automations', logo:'📡', subtitle:'Social Agent Console', color:'#06b6d4' };
+
+const api = async (path, opts={}) => {
+  const r = await fetch(API + path, { headers:{'Content-Type':'application/json'}, ...opts });
+  if (!r.ok) { const e = await r.json().catch(()=>({detail:r.statusText})); throw new Error(e.detail || r.statusText); }
+  return r.json();
+};
+const post = (path, body) => api(path, { method:'POST', body: JSON.stringify(body) });
+const put  = (path, body) => api(path, { method:'PUT',  body: JSON.stringify(body) });
+
+const toast = (msg, type='success') => {
+  const el = document.createElement('div');
+  el.className = `fixed top-4 right-4 z-50 px-5 py-3 rounded-lg shadow-xl text-white text-sm font-medium fade-in pointer-events-none ${type==='error'?'bg-red-600':'bg-emerald-600'}`;
+  el.textContent = msg;
+  document.body.appendChild(el);
+  setTimeout(() => el.remove(), 3500);
+};
+
+const Icon = ({ d, size=18, cls='' }) => (
+  <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24"
+    fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={cls}>
+    <path d={d}/>
+  </svg>
+);
+
+const I = {
+  dash:     'M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z',
+  clients:  'M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2M12 3a4 4 0 1 0 0 8 4 4 0 0 0 0-8z',
+  studio:   'M12 20h9M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z',
+  leads:    'M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.15 12 19.79 19.79 0 0 1 1.07 3.36 2 2 0 0 1 3 1h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L7.09 8.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z',
+  activity: 'M22 12h-4l-3 9L9 3l-3 9H2',
+  analytics:'M18 20V10M12 20V4M6 20v-6',
+  settings: 'M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z',
+  send:     'M22 2L11 13M22 2L15 22l-4-9-9-4 20-7z',
+  plus:     'M12 5v14M5 12h14',
+  trash:    'M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6',
+  check:    'M20 6L9 17l-5-5',
+  x:        'M18 6L6 18M6 6l12 12',
+  copy:     'M8 8H6a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-2M16 2h4a2 2 0 0 1 2 2v4M10 14L21.5 2.5',
+  refresh:  'M23 4v6h-6M1 20v-6h6M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15',
+  eye:      'M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8zM12 9a3 3 0 1 0 0 6 3 3 0 0 0 0-6z',
+  zap:      'M13 2L3 14h9l-1 8 10-12h-9l1-8z',
+  target:   'M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20zM12 18a6 6 0 1 0 0-12 6 6 0 0 0 0 12zM12 14a2 2 0 1 0 0-4 2 2 0 0 0 0 4z',
+  calendar: 'M8 2v4M16 2v4M3 10h18M19 4H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2z',
+  msg:      'M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z',
+  trending: 'M23 6l-9.5 9.5-5-5L1 18M17 6h6v6',
+  alert:    'M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0zM12 9v4M12 17h.01',
+  info:     'M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20zM12 8h.01M12 12v4',
+  download: 'M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3',
+  inbox:    'M22 12h-6l-2 3h-4l-2-3H2M5.45 5.11L2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z',
+  sparkles: 'M12 3l1.5 4.5L18 9l-4.5 1.5L12 15l-1.5-4.5L6 9l4.5-1.5L12 3zM5 17l.75 2.25L8 20l-2.25.75L5 23l-.75-2.25L2 20l2.25-.75L5 17zM19 3l.75 2.25L22 6l-2.25.75L19 9l-.75-2.25L16 6l2.25-.75L19 3z',
+  book:     'M4 19.5A2.5 2.5 0 0 1 6.5 17H20M4 19.5A2.5 2.5 0 0 0 6.5 22H20V2H6.5A2.5 2.5 0 0 0 4 4.5v15z',
+  chevron:  'M9 18l6-6-6-6',
+  save:     'M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2zM17 21v-8H7v8M7 3v5h8',
+};
+
+// ─── Shared Components ────────────────────────────────────────────────────────
+const Btn = ({ children, onClick, variant='primary', size='md', disabled, cls='' }) => {
+  const base = 'inline-flex items-center gap-2 font-medium rounded-lg transition-all focus:outline-none';
+  const sizes = { sm:'px-3 py-1.5 text-xs', md:'px-4 py-2 text-sm', lg:'px-6 py-3 text-base' };
+  const variants = {
+    primary: 'bg-cyan-500 hover:bg-cyan-600 text-white shadow disabled:opacity-50',
+    ghost:   'bg-slate-700 hover:bg-slate-600 text-slate-200 disabled:opacity-50',
+    danger:  'bg-red-600 hover:bg-red-700 text-white disabled:opacity-50',
+    outline: 'border border-slate-600 hover:border-cyan-400 hover:text-cyan-400 text-slate-300 disabled:opacity-50',
+  };
+  return (
+    <button onClick={onClick} disabled={disabled} className={`${base} ${sizes[size]} ${variants[variant]} ${cls}`}>
+      {children}
+    </button>
+  );
+};
+
+const Card = ({ children, cls='' }) => (
+  <div className={`bg-slate-800/60 border border-slate-700 rounded-xl p-5 ${cls}`}>{children}</div>
+);
+
+const Label = ({ children }) => <label className="block text-xs font-medium text-slate-400 mb-1 uppercase tracking-wide">{children}</label>;
+
+const Input = ({ value, onChange, placeholder, type='text', cls='' }) => (
+  <input type={type} value={value} onChange={onChange} placeholder={placeholder}
+    className={`w-full px-3 py-2 bg-slate-900 border border-slate-600 rounded-lg text-sm text-white placeholder-slate-500 focus:ring-2 focus:ring-cyan-500 focus:border-transparent ${cls}`} />
+);
+
+const Select = ({ value, onChange, children, cls='' }) => (
+  <select value={value} onChange={onChange}
+    className={`w-full px-3 py-2 bg-slate-900 border border-slate-600 rounded-lg text-sm text-white focus:ring-2 focus:ring-cyan-500 focus:border-transparent ${cls}`}>
+    {children}
+  </select>
+);
+
+const Textarea = ({ value, onChange, placeholder, rows=4, cls='' }) => (
+  <textarea value={value} onChange={onChange} placeholder={placeholder} rows={rows}
+    className={`w-full px-3 py-2 bg-slate-900 border border-slate-600 rounded-lg text-sm text-white placeholder-slate-500 focus:ring-2 focus:ring-cyan-500 focus:border-transparent ${cls}`} />
+);
+
+const Badge = ({ children, color='slate' }) => {
+  const colors = {
+    slate:'bg-slate-700 text-slate-300', green:'bg-emerald-900/50 text-emerald-400 border border-emerald-800',
+    red:'bg-red-900/50 text-red-400 border border-red-800', yellow:'bg-yellow-900/50 text-yellow-400 border border-yellow-800',
+    cyan:'bg-cyan-900/50 text-cyan-400 border border-cyan-800', purple:'bg-purple-900/50 text-purple-400 border border-purple-800',
+    orange:'bg-orange-900/50 text-orange-400 border border-orange-800',
+  };
+  return <span className={`px-2 py-0.5 text-xs rounded-full font-medium ${colors[color]||colors.slate}`}>{children}</span>;
+};
+
+const Spinner = () => <div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full spin" />;
+
+const StatCard = ({ label, value, sub, color='text-white', icon }) => (
+  <Card>
+    <div className="flex items-center justify-between mb-1">
+      <span className="text-xs text-slate-400 uppercase tracking-wide">{label}</span>
+      {icon && <span className="text-slate-500">{icon}</span>}
+    </div>
+    <div className={`text-3xl font-bold ${color}`}>{value}</div>
+    {sub && <div className="text-xs text-slate-500 mt-1">{sub}</div>}
+  </Card>
+);
+
+const BarChart = ({ data, height=120, color='#06b6d4', labelKey='label', valueKey='count' }) => {
+  if (!data || !data.length) return <div className="text-slate-500 text-sm text-center py-8">No data</div>;
+  const max = Math.max(...data.map(d => d[valueKey] || 0)) || 1;
+  const w = 100 / data.length;
+  return (
+    <svg viewBox={`0 0 100 ${height}`} className="w-full" style={{height}}>
+      {data.map((d, i) => {
+        const h = ((d[valueKey] || 0) / max) * (height - 20);
+        const x = i * w + w * 0.1;
+        const barW = w * 0.8;
+        return (
+          <g key={i}>
+            <rect x={x} y={height - 20 - h} width={barW} height={h} fill={color} opacity="0.8" rx="1" />
+            <text x={x + barW / 2} y={height - 4} textAnchor="middle" fontSize="5" fill="#64748b">
+              {String(d[labelKey]).slice(0, 3)}
+            </text>
+          </g>
+        );
+      })}
+    </svg>
+  );
+};
+
+const SparkLine = ({ data, color='#06b6d4', height=40 }) => {
+  if (!data || data.length < 2) return null;
+  const max = Math.max(...data) || 1;
+  const pts = data.map((v, i) => `${(i / (data.length - 1)) * 100},${height - (v / max) * height}`).join(' ');
+  return (
+    <svg viewBox={`0 0 100 ${height}`} className="w-full" style={{height}} preserveAspectRatio="none">
+      <polyline points={pts} fill="none" stroke={color} strokeWidth="2" />
+    </svg>
+  );
+};
+
+const INDUSTRIES = [
+  { value:'trading', label:'Trading / Finance', icon:'📈' },
+  { value:'systems', label:'Systems / Tech', icon:'⚙️' },
+  { value:'lawn',    label:'Lawn Care', icon:'🌱' },
+  { value:'restaurant', label:'Restaurant / Food', icon:'🍽️' },
+  { value:'fitness', label:'Fitness / Health', icon:'💪' },
+  { value:'realestate', label:'Real Estate', icon:'🏠' },
+  { value:'local',   label:'Local Service', icon:'📍' },
+  { value:'tax',     label:'Tax Services', icon:'🧾' },
+];
+
+const CONTENT_TYPES = [
+  { value:'educational',       label:'Educational' },
+  { value:'promotional',       label:'Promotional' },
+  { value:'testimonial',       label:'Testimonial' },
+  { value:'seasonal',          label:'Seasonal' },
+  { value:'engagement_question', label:'Engagement Question' },
+];
+
+// ═════════════════════════════════════════════════════════════════════════════
+// STYLE ANALYZER — calls Anthropic API directly from browser
+// ═════════════════════════════════════════════════════════════════════════════
+const StyleAnalyzer = ({ clients }) => {
+  const [analyzerClient, setAnalyzerClient] = useState('');
+  const [analyzerMode, setAnalyzerMode] = useState('analyze');
+  const [examplePosts, setExamplePosts] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [result, setResult] = useState(null);
+  const [apiKey, setApiKey] = useState(() => localStorage.getItem(ANTHROPIC_KEY_STORAGE) || '');
+  const [showKeyInput, setShowKeyInput] = useState(false);
+  const [copiedIdx, setCopiedIdx] = useState(null);
+
+  const saveKey = () => {
+    localStorage.setItem(ANTHROPIC_KEY_STORAGE, apiKey);
+    setShowKeyInput(false);
+    toast('API key saved');
+  };
+
+  const copyText = (text, idx) => {
+    navigator.clipboard.writeText(text);
+    setCopiedIdx(idx);
+    setTimeout(() => setCopiedIdx(null), 2000);
+    toast('Copied!');
+  };
+
+  const getClientInfo = () => {
+    const c = clients.find(x => x.name === analyzerClient);
+    return { name: analyzerClient || 'this client', industry: c?.industry || 'general' };
+  };
+
+  const runAnalysis = async () => {
+    if (!examplePosts.trim()) { toast('Paste some example posts first', 'error'); return; }
+    if (!apiKey) { setShowKeyInput(true); toast('Enter your Anthropic API key first', 'error'); return; }
+
+    setLoading(true);
+    setResult(null);
+
+    const { name, industry } = getClientInfo();
+
+    const prompts = {
+      analyze: {
+        system: `You are a social media content strategist. Analyze posts and return ONLY valid JSON, no markdown fences, no explanation:
+{"voice":"label","tone_score":{"professional":0,"casual":0,"educational":0,"promotional":0},"strengths":[],"weaknesses":[],"avg_length":"short|medium|long","hook_style":"description","cta_presence":"none|soft|direct","engagement_prediction":"low|medium|high","style_summary":"2-3 sentences","recommendations":[]}`,
+        user: `Analyze these Facebook posts from ${name} (${industry}):\n\n${examplePosts}`
+      },
+      improve: {
+        system: `You are a Facebook content optimizer. Return ONLY valid JSON array, no markdown:
+[{"original":"...","improved":"...","changes":"what changed and why"}]`,
+        user: `Improve these posts from ${name} (${industry}) for better engagement. Keep their voice but sharpen hooks, clarity, and CTAs:\n\n${examplePosts}`
+      },
+      generate: {
+        system: `You are a social media content creator. Generate new posts matching the provided style. Return ONLY valid JSON array, no markdown:
+[{"post":"full text","pillar":"content pillar","hook_type":"hook description"}]
+Generate exactly 5 posts.`,
+        user: `Study the voice and style of these posts from ${name} (${industry}), then write 5 NEW original posts in the same style:\n\n${examplePosts}`
+      }
+    };
+
+    try {
+      const r = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-api-key': apiKey,
+          'anthropic-version': '2023-06-01',
+          'anthropic-dangerous-direct-browser-access': 'true',
+        },
+        body: JSON.stringify({
+          model: 'claude-sonnet-4-20250514',
+          max_tokens: 1500,
+          system: prompts[analyzerMode].system,
+          messages: [{ role: 'user', content: prompts[analyzerMode].user }]
+        })
+      });
+
+      if (!r.ok) {
+        const err = await r.json().catch(() => ({}));
+        throw new Error(err.error?.message || `API error ${r.status}`);
+      }
+
+      const data = await r.json();
+      const text = data.content?.find(b => b.type === 'text')?.text || '';
+      const clean = text.replace(/```json|```/g, '').trim();
+      const parsed = JSON.parse(clean);
+      setResult({ mode: analyzerMode, data: parsed, client: name });
+    } catch (e) {
+      console.error(e);
+      toast(e.message || 'Analysis failed', 'error');
+      setResult({ mode: 'error', error: e.message });
+    }
+
+    setLoading(false);
+  };
+
+  const saveStyleToConfig = async () => {
+    if (!result?.data || !analyzerClient) return;
+    const d = result.data;
+    const styleNote = `Voice: ${d.voice}. ${d.style_summary || ''}`.trim();
+    // Update client config via server
+    try {
+      const config = await api('/api/config');
+      const pages = config.pages.map(p =>
+        p.client_name === analyzerClient
+          ? { ...p, style_notes: styleNote }
+          : p
+      );
+      await put('/api/config', { config: { ...config, pages } });
+      toast('Style profile saved to client config!');
+    } catch(e) {
+      toast('Could not save — server may be offline', 'error');
+    }
+  };
+
+  const ScoreBar = ({ label, value }) => (
+    <div className="flex items-center gap-3">
+      <span className="text-slate-400 text-xs w-24 capitalize">{label}</span>
+      <div className="flex-1 bg-slate-700 rounded-full h-1.5">
+        <div className="bg-cyan-400 h-1.5 rounded-full transition-all" style={{ width: `${(value||0) * 10}%` }} />
+      </div>
+      <span className="text-cyan-400 text-xs w-4">{value}</span>
+    </div>
+  );
+
+  return (
+    <div className="space-y-4 fade-in">
+      {/* Header banner */}
+      <div className="bg-gradient-to-r from-cyan-500/10 to-purple-500/10 border border-cyan-500/20 rounded-xl p-4">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <Icon d={I.sparkles} size={18} cls="text-cyan-400" />
+            <div>
+              <div className="text-sm font-semibold text-white">Style Analyzer</div>
+              <div className="text-xs text-slate-400">Analyze real posts → extract voice → improve or replicate at scale</div>
+            </div>
+          </div>
+          <Btn size="sm" variant="ghost" onClick={() => setShowKeyInput(!showKeyInput)}>
+            <Icon d={I.settings} size={14} />
+            {apiKey ? 'Key Set ✓' : 'Set API Key'}
+          </Btn>
+        </div>
+
+        {showKeyInput && (
+          <div className="mt-3 flex gap-2">
+            <Input
+              type="password"
+              value={apiKey}
+              onChange={e => setApiKey(e.target.value)}
+              placeholder="sk-ant-api03-..."
+              cls="text-xs"
+            />
+            <Btn size="sm" onClick={saveKey}>Save</Btn>
+          </div>
+        )}
+      </div>
+
+      <div className="grid grid-cols-12 gap-5">
+        {/* Left: Input */}
+        <div className="col-span-12 md:col-span-4 space-y-3">
+
+          {/* Client */}
+          <Card cls="p-4">
+            <Label>Client (optional)</Label>
+            <Select value={analyzerClient} onChange={e => setAnalyzerClient(e.target.value)}>
+              <option value="">— Custom / No Client —</option>
+              {clients.map(c => <option key={c.name} value={c.name}>{c.name}</option>)}
+            </Select>
+          </Card>
+
+          {/* Mode */}
+          <Card cls="p-4">
+            <Label>Analysis Mode</Label>
+            <div className="space-y-1 mt-1">
+              {[
+                { id:'analyze',  icon:I.book,     label:'Style Analysis',     desc:'Voice, tone, strengths, recommendations' },
+                { id:'improve',  icon:I.trending, label:'Improve Posts',       desc:'Rewrite each post for more engagement' },
+                { id:'generate', icon:I.zap,      label:'Generate New Posts',  desc:'5 new posts matching their proven style' },
+              ].map(m => (
+                <button key={m.id} onClick={() => { setAnalyzerMode(m.id); setResult(null); }}
+                  className={`w-full text-left p-3 rounded-lg border transition-all ${analyzerMode === m.id ? 'bg-cyan-500/15 border-cyan-500/40 text-cyan-300' : 'border-transparent hover:bg-slate-700/50 text-slate-300'}`}>
+                  <div className="flex items-center gap-2">
+                    <Icon d={m.icon} size={14} />
+                    <span className="text-xs font-medium">{m.label}</span>
+                  </div>
+                  <div className="text-xs text-slate-500 mt-0.5 pl-5">{m.desc}</div>
+                </button>
+              ))}
+            </div>
+          </Card>
+
+          {/* Post Input */}
+          <Card cls="p-4">
+            <Label>Paste Example Posts</Label>
+            <p className="text-xs text-slate-500 mb-2">Separate posts with --- or blank lines. 2-5 posts works best.</p>
+            <Textarea
+              value={examplePosts}
+              onChange={e => setExamplePosts(e.target.value)}
+              rows={10}
+              placeholder={"Post 1 text here...\n\n---\n\nPost 2 text here...\n\n---\n\nPost 3 text here..."}
+              cls="font-mono text-xs"
+            />
+            <div className="flex items-center justify-between mt-2">
+              <span className="text-xs text-slate-600">{examplePosts.length} chars</span>
+              <Btn onClick={runAnalysis} disabled={loading || !examplePosts.trim()} size="sm">
+                {loading ? <><Spinner /> Analyzing...</> : <><Icon d={I.sparkles} size={14} />Run Analysis</>}
+              </Btn>
+            </div>
+          </Card>
+        </div>
+
+        {/* Right: Results */}
+        <div className="col-span-12 md:col-span-8">
+          {/* Loading */}
+          {loading && (
+            <Card cls="flex items-center justify-center h-64">
+              <div className="text-center">
+                <Spinner />
+                <p className="text-sm text-slate-400 mt-3">Analyzing content style...</p>
+                <p className="text-xs text-slate-600 mt-1">~10-15 seconds</p>
+              </div>
+            </Card>
+          )}
+
+          {/* Empty state */}
+          {!loading && !result && (
+            <Card cls="text-center py-20 text-slate-500">
+              <Icon d={I.sparkles} size={40} cls="mx-auto mb-3 text-slate-600" />
+              <p className="text-sm">Results will appear here</p>
+              <p className="text-xs text-slate-600 mt-1">Paste example posts and click Run Analysis</p>
+            </Card>
+          )}
+
+          {/* Error */}
+          {!loading && result?.mode === 'error' && (
+            <Card cls="border-red-800">
+              <p className="text-red-400 text-sm">Error: {result.error}</p>
+              <p className="text-slate-500 text-xs mt-1">Check your Anthropic API key in Settings above.</p>
+            </Card>
+          )}
+
+          {/* ── ANALYSIS RESULTS ── */}
+          {!loading && result?.mode === 'analyze' && Array.isArray(result.data) === false && (
+            <div className="space-y-4 fade-in">
+              {/* Voice + Engagement */}
+              <div className="grid grid-cols-2 gap-3">
+                <Card cls="p-4">
+                  <div className="text-xs text-slate-500 uppercase tracking-wider mb-1">Detected Voice</div>
+                  <div className="text-xl font-bold text-cyan-400">{result.data.voice}</div>
+                  <div className="text-xs text-slate-400 mt-1">Avg: {result.data.avg_length} · CTA: {result.data.cta_presence}</div>
+                </Card>
+                <Card cls="p-4">
+                  <div className="text-xs text-slate-500 uppercase tracking-wider mb-1">Engagement Prediction</div>
+                  <div className={`text-xl font-bold ${result.data.engagement_prediction==='high'?'text-emerald-400':result.data.engagement_prediction==='medium'?'text-yellow-400':'text-red-400'}`}>
+                    {result.data.engagement_prediction?.toUpperCase()}
+                  </div>
+                  <div className="text-xs text-slate-400 mt-1">Hook: {result.data.hook_style}</div>
+                </Card>
+              </div>
+
+              {/* Tone Scores */}
+              {result.data.tone_score && (
+                <Card>
+                  <div className="text-xs text-slate-500 uppercase tracking-wider mb-3">Tone Breakdown</div>
+                  <div className="space-y-2">
+                    {Object.entries(result.data.tone_score).map(([k,v]) => (
+                      <div key={k} className="flex items-center gap-3">
+                        <span className="text-slate-400 text-xs w-24 capitalize">{k}</span>
+                        <div className="flex-1 bg-slate-700 rounded-full h-1.5">
+                          <div className="bg-cyan-400 h-1.5 rounded-full" style={{width:`${(v||0)*10}%`}} />
+                        </div>
+                        <span className="text-cyan-400 text-xs w-4">{v}</span>
+                      </div>
+                    ))}
+                  </div>
+                </Card>
+              )}
+
+              {/* Strengths / Weaknesses */}
+              <div className="grid grid-cols-2 gap-3">
+                <Card>
+                  <div className="text-xs text-emerald-400 uppercase tracking-wider mb-2">✓ Strengths</div>
+                  <ul className="space-y-1.5">
+                    {result.data.strengths?.map((s,i) => (
+                      <li key={i} className="text-xs text-slate-300 flex items-start gap-1.5">
+                        <span className="text-emerald-400 mt-0.5">•</span>{s}
+                      </li>
+                    ))}
+                  </ul>
+                </Card>
+                <Card>
+                  <div className="text-xs text-yellow-400 uppercase tracking-wider mb-2">⚠ Weaknesses</div>
+                  <ul className="space-y-1.5">
+                    {result.data.weaknesses?.map((w,i) => (
+                      <li key={i} className="text-xs text-slate-300 flex items-start gap-1.5">
+                        <span className="text-yellow-400 mt-0.5">•</span>{w}
+                      </li>
+                    ))}
+                  </ul>
+                </Card>
+              </div>
+
+              {/* Summary */}
+              {result.data.style_summary && (
+                <Card>
+                  <div className="text-xs text-slate-500 uppercase tracking-wider mb-2">Style Summary</div>
+                  <p className="text-sm text-slate-300 leading-relaxed">{result.data.style_summary}</p>
+                </Card>
+              )}
+
+              {/* Recommendations */}
+              {result.data.recommendations?.length > 0 && (
+                <Card cls="border-cyan-900/50 bg-cyan-900/10">
+                  <div className="text-xs text-cyan-400 uppercase tracking-wider mb-2">Recommendations</div>
+                  <ul className="space-y-2">
+                    {result.data.recommendations.map((r,i) => (
+                      <li key={i} className="text-xs text-slate-300 flex items-start gap-2">
+                        <Icon d={I.chevron} size={12} cls="text-cyan-400 mt-0.5 flex-shrink-0" />{r}
+                      </li>
+                    ))}
+                  </ul>
+                </Card>
+              )}
+
+              {/* Save to config */}
+              {analyzerClient && (
+                <Btn variant="outline" cls="w-full justify-center" onClick={saveStyleToConfig}>
+                  <Icon d={I.save} size={14} />
+                  Save Style Profile to "{analyzerClient}" Config
+                </Btn>
+              )}
+            </div>
+          )}
+
+          {/* ── IMPROVE RESULTS ── */}
+          {!loading && result?.mode === 'improve' && Array.isArray(result.data) && (
+            <div className="space-y-4 fade-in">
+              <div className="text-xs text-slate-500 uppercase tracking-wider">{result.data.length} posts improved</div>
+              {result.data.map((item, idx) => (
+                <Card key={idx} cls="p-0 overflow-hidden">
+                  <div className="p-4 border-b border-slate-700/50">
+                    <div className="text-xs text-slate-500 uppercase mb-2">Original</div>
+                    <p className="text-xs text-slate-400 whitespace-pre-wrap leading-relaxed">{item.original}</p>
+                  </div>
+                  <div className="p-4">
+                    <div className="flex items-center justify-between mb-2">
+                      <div className="text-xs text-cyan-400 uppercase">Improved</div>
+                      <Btn size="sm" variant="ghost" onClick={() => copyText(item.improved, idx)}>
+                        <Icon d={copiedIdx === idx ? I.check : I.copy} size={12} />
+                        {copiedIdx === idx ? 'Copied' : 'Copy'}
+                      </Btn>
+                    </div>
+                    <p className="text-sm text-white whitespace-pre-wrap leading-relaxed">{item.improved}</p>
+                    {item.changes && (
+                      <div className="mt-3 text-xs text-slate-500 bg-slate-900/50 rounded p-2 border border-slate-700">
+                        <span className="text-slate-400 font-medium">Changes: </span>{item.changes}
+                      </div>
+                    )}
+                  </div>
+                </Card>
+              ))}
+            </div>
+          )}
+
+          {/* ── GENERATE RESULTS ── */}
+          {!loading && result?.mode === 'generate' && Array.isArray(result.data) && (
+            <div className="space-y-4 fade-in">
+              <div className="flex items-center justify-between">
+                <div className="text-xs text-slate-500 uppercase tracking-wider">{result.data.length} posts generated in matching style</div>
+                <Btn size="sm" variant="ghost" onClick={runAnalysis}><Icon d={I.refresh} size={14} />Regenerate</Btn>
+              </div>
+              {result.data.map((item, idx) => (
+                <Card key={idx}>
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="flex items-center gap-2">
+                      {item.pillar && <Badge color="cyan">{item.pillar}</Badge>}
+                      {item.hook_type && <Badge color="slate">{item.hook_type}</Badge>}
+                    </div>
+                    <Btn size="sm" variant="ghost" onClick={() => copyText(item.post, `g${idx}`)}>
+                      <Icon d={copiedIdx === `g${idx}` ? I.check : I.copy} size={12} />
+                      {copiedIdx === `g${idx}` ? 'Copied' : 'Copy'}
+                    </Btn>
+                  </div>
+                  <div className="bg-slate-900/60 rounded-lg p-3 border border-slate-700/50">
+                    <p className="text-sm text-slate-200 whitespace-pre-wrap leading-relaxed">{item.post}</p>
+                  </div>
+                </Card>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// ═════════════════════════════════════════════════════════════════════════════
+// TAB: DASHBOARD
+// ═════════════════════════════════════════════════════════════════════════════
+const TabDashboard = ({ serverOk }) => {
+  const [stats, setStats] = useState(null);
+  const [clients, setClients] = useState([]);
+  const [logs, setLogs] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  const load = useCallback(async () => {
+    try {
+      const [s, c, l] = await Promise.all([
+        api('/api/analytics/summary').catch(()=>null),
+        api('/api/clients').catch(()=>({clients:[]})),
+        api('/api/logs?limit=8').catch(()=>({logs:[]})),
+      ]);
+      setStats(s); setClients(c.clients||[]); setLogs(l.logs||[]);
+    } finally { setLoading(false); }
+  }, []);
+
+  useEffect(() => { load(); }, [load]);
+
+  const postAll = async () => {
+    try {
+      const r = await post('/api/post/all', {});
+      toast(`Started job for ${r.clients?.length || 0} client(s)`);
+    } catch(e) { toast(e.message, 'error'); }
+  };
+
+  if (loading) return <div className="flex items-center justify-center h-64 text-slate-500"><Spinner /></div>;
+
+  return (
+    <div className="space-y-6 fade-in">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <StatCard label="Server" value={serverOk?'Online':'Offline'} color={serverOk?'text-emerald-400':'text-red-400'} icon={<Icon d={I.activity} size={16} />} />
+        <StatCard label="Clients" value={clients.length} sub={`${clients.filter(c=>c.auto_posting).length} active`} icon={<Icon d={I.clients} size={16} />} />
+        <StatCard label="Total Posts" value={stats?.total_posts ?? '—'} sub="All time" icon={<Icon d={I.trending} size={16} />} />
+        <StatCard label="Success Rate" value={stats ? `${stats.success_rate}%` : '—'} color="text-emerald-400" sub={`${stats?.posts_this_week ?? 0} this week`} icon={<Icon d={I.check} size={16} />} />
+      </div>
+
+      {stats?.posts_last_30_days?.length > 1 && (
+        <Card>
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-sm font-semibold text-white">Posts — Last 30 Days</span>
+            <Badge color="cyan">{stats.posts_last_30_days.reduce((s,d)=>s+d.count,0)} posts</Badge>
+          </div>
+          <SparkLine data={stats.posts_last_30_days.map(d=>d.count)} height={48} />
+        </Card>
+      )}
+
+      <Card>
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-sm font-semibold text-white">Client Overview</h3>
+          {serverOk && <Btn onClick={postAll} size="sm"><Icon d={I.zap} size={14} />Post All Now</Btn>}
+        </div>
+        <div className="space-y-2">
+          {clients.map((c, i) => (
+            <div key={i} className="flex items-center justify-between p-3 bg-slate-900/50 rounded-lg border border-slate-700/50">
+              <div className="flex items-center gap-3">
+                <div className={`w-2 h-2 rounded-full ${c.auto_posting?'bg-emerald-400':'bg-slate-600'}`} />
+                <div>
+                  <div className="text-sm font-medium text-white">{c.name}</div>
+                  <div className="text-xs text-slate-500 capitalize">{c.industry}</div>
+                </div>
+              </div>
+              <div className="flex items-center gap-4">
+                <Badge color={c.auto_posting?'green':'slate'}>{c.auto_posting?'Active':'Paused'}</Badge>
+              </div>
+            </div>
+          ))}
+          {!clients.length && <p className="text-sm text-slate-500 text-center py-4">No clients configured. Add one in the Clients tab.</p>}
+        </div>
+      </Card>
+
+      <Card>
+        <h3 className="text-sm font-semibold text-white mb-3">Recent Activity</h3>
+        <div className="space-y-1">
+          {logs.map((l, i) => (
+            <div key={i} className="flex items-center gap-3 py-2 border-b border-slate-700/50 last:border-0">
+              <span className={`text-xs ${l.success?'text-emerald-400':'text-red-400'}`}>{l.success?'✓':'✗'}</span>
+              <span className="text-xs text-slate-300 flex-1">{l.page_name}</span>
+              <span className="text-xs text-slate-500">{l.pillar?.slice(0,30)}</span>
+              <span className="text-xs text-slate-600">{l.ts?.slice(0,16)}</span>
+            </div>
+          ))}
+          {!logs.length && <p className="text-xs text-slate-500 text-center py-4">No activity yet</p>}
+        </div>
+      </Card>
+    </div>
+  );
+};
+
+// ═════════════════════════════════════════════════════════════════════════════
+// TAB: CLIENTS
+// ═════════════════════════════════════════════════════════════════════════════
+const TabClients = () => {
+  const [config, setConfig] = useState(null);
+  const [selected, setSelected] = useState(0);
+  const [saving, setSaving] = useState(false);
+  const [posting, setPosting] = useState({});
+
+  const load = useCallback(async () => {
+    try {
+      const c = await api('/api/config');
+      setConfig(c);
+    } catch(e) { toast('Could not load config — is the server running?', 'error'); }
+  }, []);
+
+  useEffect(() => { load(); }, [load]);
+
+  const save = async () => {
+    setSaving(true);
+    try { await put('/api/config', { config }); toast('Config saved'); }
+    catch(e) { toast(e.message, 'error'); }
+    finally { setSaving(false); }
+  };
+
+  const addClient = () => {
+    const newPage = {
+      client_name: 'New Client', page_id: '', page_token: '',
+      brand: { industry: 'local', tone: 'friendly' },
+      features: { visuals: false, weather: false, cta: false, auto_posting: false, lead_capture: false },
+      lead_keywords: ['INFO','YES','FREE','QUOTE'],
+      cadence: { posts_per_run: 1, days: ['Mon','Wed','Fri'] },
+      mode_weights: { education: 70, promotion: 30 },
+      style_tags: [], posts_per_run: 1,
+    };
+    const updated = { ...config, pages: [...(config?.pages||[]), newPage] };
+    setConfig(updated);
+    setSelected(updated.pages.length - 1);
+  };
+
+  const delClient = (idx) => {
+    if (!window.confirm('Delete this client?')) return;
+    const pages = config.pages.filter((_,i)=>i!==idx);
+    setConfig({...config, pages});
+    setSelected(Math.min(selected, pages.length-1));
+  };
+
+  const updatePage = (idx, path, val) => {
+    const pages = [...config.pages];
+    const keys = path.split('.');
+    let obj = pages[idx];
+    for (let i=0;i<keys.length-1;i++) obj = obj[keys[i]];
+    obj[keys[keys.length-1]] = val;
+    setConfig({...config, pages});
+  };
+
+  const postNow = async (name) => {
+    setPosting(p=>({...p,[name]:true}));
+    try {
+      const r = await post('/api/post/client', { name });
+      toast(`Job started: ${r.job_id}`);
+      const jid = r.job_id;
+      const poll = setInterval(async () => {
+        try {
+          const j = await api(`/api/jobs/${jid}`);
+          if (j.status !== 'running') {
+            clearInterval(poll);
+            setPosting(p=>({...p,[name]:false}));
+            const ok = j.results?.every(r=>r.status==='success');
+            toast(ok ? 'Posted successfully!' : 'Post finished — check Activity tab', ok?'success':'error');
+          }
+        } catch { clearInterval(poll); setPosting(p=>({...p,[name]:false})); }
+      }, 2000);
+    } catch(e) { toast(e.message,'error'); setPosting(p=>({...p,[name]:false})); }
+  };
+
+  if (!config) return <div className="flex items-center justify-center h-64"><Spinner /></div>;
+
+  const pages = config.pages || [];
+  const cur = pages[selected];
+
+  return (
+    <div className="grid grid-cols-12 gap-5 fade-in">
+      <div className="col-span-12 md:col-span-4 space-y-3">
+        <Card cls="p-4">
+          <div className="flex items-center justify-between mb-3">
+            <span className="text-sm font-semibold text-white">Clients ({pages.length})</span>
+            <div className="flex gap-2">
+              <Btn size="sm" variant="ghost" onClick={addClient}><Icon d={I.plus} size={14} /></Btn>
+              <Btn size="sm" onClick={save} disabled={saving}>{saving?<Spinner/>:<Icon d={I.check} size={14} />}Save</Btn>
+            </div>
+          </div>
+          <div className="space-y-1">
+            {pages.map((p,i) => (
+              <div key={i} onClick={()=>setSelected(i)}
+                className={`p-3 rounded-lg cursor-pointer border transition-all flex items-center justify-between ${selected===i?'bg-cyan-500/15 border-cyan-500/40':'border-transparent hover:bg-slate-700/50'}`}>
+                <div>
+                  <div className="text-sm font-medium text-white">{p.client_name||'Unnamed'}</div>
+                  <div className="text-xs text-slate-500 capitalize">{p.brand?.industry||'—'}</div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className={`w-2 h-2 rounded-full ${p.features?.auto_posting?'bg-emerald-400':'bg-slate-600'}`}/>
+                  <button onClick={e=>{e.stopPropagation();delClient(i);}} className="text-slate-600 hover:text-red-400">
+                    <Icon d={I.trash} size={14} />
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </Card>
+
+        {cur && (
+          <Card cls="p-4">
+            <h4 className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-3">Quick Actions</h4>
+            <Btn cls="w-full justify-center" disabled={posting[cur.client_name]} onClick={()=>postNow(cur.client_name)}>
+              {posting[cur.client_name]?<Spinner/>:<Icon d={I.zap} size={14} />}Post Now
+            </Btn>
+          </Card>
+        )}
+      </div>
+
+      <div className="col-span-12 md:col-span-8">
+        {cur ? (
+          <div className="space-y-4">
+            <Card>
+              <h3 className="text-sm font-semibold text-white mb-4">Basic Information</h3>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="col-span-2">
+                  <Label>Client Name</Label>
+                  <Input value={cur.client_name||''} onChange={e=>updatePage(selected,'client_name',e.target.value)} placeholder="Business name" />
+                </div>
+                <div>
+                  <Label>Industry</Label>
+                  <Select value={cur.brand?.industry||'local'} onChange={e=>updatePage(selected,'brand.industry',e.target.value)}>
+                    {INDUSTRIES.map(i=><option key={i.value} value={i.value}>{i.icon} {i.label}</option>)}
+                  </Select>
+                </div>
+                <div>
+                  <Label>Page ID</Label>
+                  <Input value={cur.page_id||''} onChange={e=>updatePage(selected,'page_id',e.target.value)} placeholder="Facebook Page ID" />
+                </div>
+                <div className="col-span-2">
+                  <Label>Page Access Token</Label>
+                  <Input type="password" value={cur.page_token||''} onChange={e=>updatePage(selected,'page_token',e.target.value)} placeholder="EAABs..." />
+                </div>
+                {cur.style_notes && (
+                  <div className="col-span-2">
+                    <Label>Style Profile (from Analyzer)</Label>
+                    <div className="px-3 py-2 bg-slate-900/50 border border-cyan-900/50 rounded-lg text-xs text-slate-300">{cur.style_notes}</div>
+                  </div>
+                )}
+              </div>
+            </Card>
+
+            <Card>
+              <h3 className="text-sm font-semibold text-white mb-4">Features</h3>
+              <div className="grid grid-cols-2 gap-3">
+                {['auto_posting','visuals','cta','weather','lead_capture'].map(feat => (
+                  <label key={feat} className="flex items-center gap-3 p-3 bg-slate-900/50 rounded-lg cursor-pointer hover:bg-slate-900 transition-colors">
+                    <input type="checkbox" checked={cur.features?.[feat]||false}
+                      onChange={e=>updatePage(selected,`features.${feat}`,e.target.checked)}
+                      className="w-4 h-4 rounded text-cyan-500 focus:ring-cyan-500" />
+                    <span className="text-sm text-slate-200 capitalize">{feat.replace(/_/g,' ')}</span>
+                  </label>
+                ))}
+              </div>
+            </Card>
+
+            {cur.features?.lead_capture && (
+              <Card>
+                <h3 className="text-sm font-semibold text-white mb-4">Lead Capture Keywords</h3>
+                <p className="text-xs text-slate-400 mb-3">Comma-separated keywords that trigger lead capture when commented (e.g. INFO, YES, FREE)</p>
+                <Input
+                  value={(cur.lead_keywords||[]).join(', ')}
+                  onChange={e=>updatePage(selected,'lead_keywords',e.target.value.split(',').map(k=>k.trim()).filter(Boolean))}
+                  placeholder="INFO, YES, FREE, QUOTE, JOIN"
+                />
+                <p className="text-xs text-slate-500 mt-2">Reactions from any post will also be captured automatically.</p>
+              </Card>
+            )}
+
+            <Card>
+              <h3 className="text-sm font-semibold text-white mb-4">Posting Cadence</h3>
+              <div className="space-y-4">
+                <div>
+                  <Label>Posts per Run</Label>
+                  <input type="number" min="1" max="5" value={cur.cadence?.posts_per_run||1}
+                    onChange={e=>updatePage(selected,'cadence.posts_per_run',parseInt(e.target.value))}
+                    className="w-24 px-3 py-2 bg-slate-900 border border-slate-600 rounded-lg text-sm text-white focus:ring-2 focus:ring-cyan-500" />
+                </div>
+                <div>
+                  <Label>Active Days</Label>
+                  <div className="flex gap-2 flex-wrap">
+                    {['Mon','Tue','Wed','Thu','Fri','Sat','Sun'].map(day => {
+                      const active = cur.cadence?.days?.includes(day);
+                      return (
+                        <button key={day} onClick={()=>{
+                          const days = active ? cur.cadence.days.filter(d=>d!==day) : [...(cur.cadence?.days||[]),day];
+                          updatePage(selected,'cadence.days',days);
+                        }} className={`px-3 py-1.5 text-xs rounded-lg font-medium transition-all ${active?'bg-cyan-500 text-white':'bg-slate-700 text-slate-400 hover:bg-slate-600'}`}>
+                          {day}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
+            </Card>
+          </div>
+        ) : (
+          <Card cls="text-center py-16 text-slate-500">
+            <Icon d={I.clients} size={40} cls="mx-auto mb-3 text-slate-600" />
+            <p>Select a client to configure</p>
+          </Card>
+        )}
+      </div>
+    </div>
+  );
+};
+
+// ═════════════════════════════════════════════════════════════════════════════
+// TAB: CONTENT STUDIO
+// ═════════════════════════════════════════════════════════════════════════════
+const TabStudio = () => {
+  const [mode, setMode] = useState('post');
+  const [clients, setClients] = useState([]);
+  const [industry, setIndustry] = useState('trading');
+  const [pageName, setPageName] = useState('');
+  const [topic, setTopic] = useState('');
+  const [contentType, setContentType] = useState('educational');
+  const [keyword, setKeyword] = useState('');
+  const [service, setService] = useState('');
+  const [comment, setComment] = useState('');
+  const [postContext, setPostContext] = useState('');
+  const [result, setResult] = useState(null);
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    api('/api/clients').then(r=>{
+      setClients(r.clients||[]);
+      if (r.clients?.length) { const c=r.clients[0]; setIndustry(c.industry||'trading'); setPageName(c.name||''); }
+    }).catch(()=>{});
+  }, []);
+
+  const selectClient = (name) => {
+    const c = clients.find(x=>x.name===name);
+    setPageName(name);
+    if (c) setIndustry(c.industry||'trading');
+  };
+
+  const generate = async () => {
+    setLoading(true); setResult(null);
+    try {
+      let r;
+      if (mode==='post')    r = await post('/api/generate',       { industry, page_name:pageName, content_type:contentType, topic:topic||undefined });
+      if (mode==='viral')   r = await post('/api/generate/viral', { industry, page_name:pageName, topic:topic||undefined });
+      if (mode==='lead')    r = await post('/api/generate/lead',  { industry, page_name:pageName, keyword:keyword||undefined, service:service||undefined });
+      if (mode==='calendar')r = await post('/api/calendar/generate', { industry, page_name:pageName });
+      if (mode==='comment') r = await post('/api/comments/suggest', { industry, page_name:pageName, comment, post_context:postContext });
+      setResult(r);
+    } catch(e) { toast(e.message,'error'); }
+    finally { setLoading(false); }
+  };
+
+  const copyText = (t) => { navigator.clipboard.writeText(t); toast('Copied!'); };
+
+  // Style Analyzer mode — render full analyzer component
+  if (mode === 'style') {
+    return (
+      <div className="fade-in">
+        <div className="grid grid-cols-12 gap-5">
+          {/* Left nav — same as other modes */}
+          <div className="col-span-12 md:col-span-4">
+            <Card>
+              <h3 className="text-sm font-semibold text-white mb-3">Content Mode</h3>
+              <div className="space-y-1">
+                {[
+                  { id:'post',     label:'Standard Post',    icon:I.studio,   desc:'Educational, promotional, testimonial' },
+                  { id:'viral',    label:'High Engagement',  icon:I.zap,      desc:'Designed for comments & shares' },
+                  { id:'lead',     label:'Lead Generation',  icon:I.target,   desc:'Comment-to-DM keyword posts' },
+                  { id:'calendar', label:'30-Day Calendar',  icon:I.calendar, desc:'Full month content plan' },
+                  { id:'comment',  label:'Comment Reply',    icon:I.msg,      desc:'AI-suggested reply options' },
+                  { id:'style',    label:'Style Analyzer',   icon:I.sparkles, desc:'Analyze & replicate top-performing styles', badge:'NEW' },
+                ].map(m => (
+                  <button key={m.id} onClick={()=>{ setMode(m.id); setResult(null); }}
+                    className={`w-full text-left p-3 rounded-lg border transition-all ${mode===m.id?'bg-cyan-500/15 border-cyan-500/40 text-cyan-300':'border-transparent hover:bg-slate-700/50 text-slate-300'}`}>
+                    <div className="flex items-center gap-2">
+                      <Icon d={m.icon} size={14} />
+                      <span className="text-sm font-medium">{m.label}</span>
+                      {m.badge && <span className="text-xs bg-cyan-500/20 text-cyan-400 px-1.5 py-0.5 rounded ml-auto">{m.badge}</span>}
+                    </div>
+                    <div className="text-xs text-slate-500 mt-0.5 pl-5">{m.desc}</div>
+                  </button>
+                ))}
+              </div>
+            </Card>
+          </div>
+          {/* Right: analyzer takes full width */}
+          <div className="col-span-12 md:col-span-8">
+            <StyleAnalyzer clients={clients} />
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="grid grid-cols-12 gap-5 fade-in">
+      <div className="col-span-12 md:col-span-4 space-y-4">
+        <Card>
+          <h3 className="text-sm font-semibold text-white mb-3">Content Mode</h3>
+          <div className="space-y-1">
+            {[
+              { id:'post',     label:'Standard Post',    icon:I.studio,   desc:'Educational, promotional, testimonial' },
+              { id:'viral',    label:'High Engagement',  icon:I.zap,      desc:'Designed for comments & shares' },
+              { id:'lead',     label:'Lead Generation',  icon:I.target,   desc:'Comment-to-DM keyword posts' },
+              { id:'calendar', label:'30-Day Calendar',  icon:I.calendar, desc:'Full month content plan' },
+              { id:'comment',  label:'Comment Reply',    icon:I.msg,      desc:'AI-suggested reply options' },
+              { id:'style',    label:'Style Analyzer',   icon:I.sparkles, desc:'Analyze & replicate top-performing styles', badge:'NEW' },
+            ].map(m => (
+              <button key={m.id} onClick={()=>{setMode(m.id);setResult(null);}}
+                className={`w-full text-left p-3 rounded-lg border transition-all ${mode===m.id?'bg-cyan-500/15 border-cyan-500/40 text-cyan-300':'border-transparent hover:bg-slate-700/50 text-slate-300'}`}>
+                <div className="flex items-center gap-2">
+                  <Icon d={m.icon} size={14} />
+                  <span className="text-sm font-medium">{m.label}</span>
+                  {m.badge && <span className="text-xs bg-cyan-500/20 text-cyan-400 px-1.5 py-0.5 rounded ml-auto">{m.badge}</span>}
+                </div>
+                <div className="text-xs text-slate-500 mt-0.5 pl-5">{m.desc}</div>
+              </button>
+            ))}
+          </div>
+        </Card>
+
+        <Card>
+          <h3 className="text-sm font-semibold text-white mb-3">Settings</h3>
+          <div className="space-y-3">
+            <div>
+              <Label>Client</Label>
+              <Select value={pageName} onChange={e=>selectClient(e.target.value)}>
+                <option value="">— Custom —</option>
+                {clients.map(c=><option key={c.name} value={c.name}>{c.name}</option>)}
+              </Select>
+            </div>
+            <div>
+              <Label>Industry</Label>
+              <Select value={industry} onChange={e=>setIndustry(e.target.value)}>
+                {INDUSTRIES.map(i=><option key={i.value} value={i.value}>{i.icon} {i.label}</option>)}
+              </Select>
+            </div>
+            {!pageName && (
+              <div>
+                <Label>Page / Brand Name</Label>
+                <Input value={pageName} onChange={e=>setPageName(e.target.value)} placeholder="Your brand name" />
+              </div>
+            )}
+            {mode==='post' && (
+              <div>
+                <Label>Content Type</Label>
+                <Select value={contentType} onChange={e=>setContentType(e.target.value)}>
+                  {CONTENT_TYPES.map(t=><option key={t.value} value={t.value}>{t.label}</option>)}
+                </Select>
+              </div>
+            )}
+            {(mode==='post'||mode==='viral') && (
+              <div>
+                <Label>Topic (optional)</Label>
+                <Input value={topic} onChange={e=>setTopic(e.target.value)} placeholder="Leave blank for AI to choose" />
+              </div>
+            )}
+            {mode==='lead' && (
+              <>
+                <div><Label>Keyword CTA</Label><Input value={keyword} onChange={e=>setKeyword(e.target.value)} placeholder="e.g. QUOTE, FREE, YES" /></div>
+                <div><Label>Service</Label><Input value={service} onChange={e=>setService(e.target.value)} placeholder="e.g. lawn cleanup" /></div>
+              </>
+            )}
+            {mode==='comment' && (
+              <>
+                <div><Label>Customer Comment</Label><Textarea value={comment} onChange={e=>setComment(e.target.value)} placeholder="How much does it cost?" rows={2} /></div>
+                <div><Label>Post Context (optional)</Label><Input value={postContext} onChange={e=>setPostContext(e.target.value)} placeholder="What post was this on?" /></div>
+              </>
+            )}
+            <Btn cls="w-full justify-center" onClick={generate} disabled={loading||!industry}>
+              {loading?<Spinner/>:<Icon d={I.zap} size={14} />}
+              {loading?'Generating…':'Generate'}
+            </Btn>
+          </div>
+        </Card>
+      </div>
+
+      <div className="col-span-12 md:col-span-8">
+        {!result && !loading && (
+          <Card cls="text-center py-20 text-slate-500">
+            <Icon d={I.studio} size={40} cls="mx-auto mb-3 text-slate-600" />
+            <p className="text-sm">Select a mode and click Generate</p>
+          </Card>
+        )}
+        {loading && (
+          <Card cls="flex items-center justify-center h-64">
+            <div className="text-center"><Spinner /><p className="text-sm text-slate-400 mt-3">AI is writing your content…</p></div>
+          </Card>
+        )}
+        {result && !loading && (
+          <div className="space-y-4 fade-in">
+            {(mode==='post'||mode==='viral'||mode==='lead') && result.text && (
+              <Card>
+                <div className="flex items-center justify-between mb-3">
+                  <div className="flex items-center gap-2">
+                    <Badge color="cyan">{result.type||result.format||mode}</Badge>
+                    {result.pillar && <Badge color="slate">{result.pillar.slice(0,40)}</Badge>}
+                  </div>
+                  <Btn size="sm" variant="ghost" onClick={()=>copyText(result.text)}><Icon d={I.copy} size={14} />Copy</Btn>
+                </div>
+                <div className="bg-slate-900/60 rounded-lg p-4 border border-slate-700">
+                  <p className="text-sm text-slate-200 whitespace-pre-wrap leading-relaxed">{result.text||result.post}</p>
+                </div>
+                {result.keyword && <div className="mt-3 flex items-center gap-2"><span className="text-xs text-slate-500">Keyword CTA:</span><Badge color="yellow">{result.keyword}</Badge></div>}
+                <div className="mt-4 pt-3 border-t border-slate-700 flex gap-2">
+                  <Btn size="sm" variant="ghost" onClick={generate}><Icon d={I.refresh} size={14} />Regenerate</Btn>
+                </div>
+              </Card>
+            )}
+            {mode==='calendar' && (result.days||result.calendar) && <CalendarResult result={result} copyText={copyText} />}
+            {mode==='comment' && result.replies && (
+              <Card>
+                <h3 className="text-sm font-semibold text-white mb-3">Suggested Replies</h3>
+                <div className="mb-3 p-3 bg-slate-900/50 rounded-lg border border-slate-700">
+                  <div className="text-xs text-slate-500 mb-1">Original comment:</div>
+                  <p className="text-sm text-slate-200 italic">"{result.comment || comment}"</p>
+                </div>
+                <div className="space-y-3">
+                  {result.replies.map((r,i) => (
+                    <div key={i} className="p-3 bg-slate-900/50 rounded-lg border border-slate-700">
+                      <div className="flex items-center justify-between mb-2">
+                        <Badge color={i===0?'cyan':i===1?'green':'purple'}>{r.tone}</Badge>
+                        <Btn size="sm" variant="ghost" onClick={()=>copyText(r.text)}><Icon d={I.copy} size={12} />Copy</Btn>
+                      </div>
+                      <p className="text-sm text-slate-200">{r.text}</p>
+                    </div>
+                  ))}
+                </div>
+              </Card>
+            )}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
+const CalendarResult = ({ result, copyText }) => {
+  const days = result.days || result.calendar || [];
+  const [expanded, setExpanded] = useState(null);
+  const typeColors = { educational:'cyan', promotional:'yellow', engagement:'purple', testimonial:'green', lead_gen:'red', viral:'orange', rest:'slate' };
+  return (
+    <Card>
+      <div className="flex items-center justify-between mb-4">
+        <h3 className="text-sm font-semibold text-white">30-Day Content Calendar</h3>
+        <Btn size="sm" variant="ghost" onClick={()=>{
+          const txt = days.map(d=>`Day ${d.day} [${d.type}]: ${d.topic||d.hook||''}\n${d.post_text||d.post||''}`).join('\n\n---\n\n');
+          copyText(txt);
+        }}><Icon d={I.copy} size={14} />Copy All</Btn>
+      </div>
+      <div className="grid grid-cols-7 gap-1">
+        {days.map(d => (
+          <button key={d.day} onClick={()=>setExpanded(expanded===d.day?null:d.day)}
+            className={`p-2 rounded text-left transition-all border ${expanded===d.day?'border-cyan-500/50 bg-cyan-500/10':'border-transparent hover:bg-slate-700/50'}`}>
+            <div className="text-xs text-slate-500">Day {d.day}</div>
+            <Badge color={typeColors[d.type]||'slate'}>{d.type}</Badge>
+          </button>
+        ))}
+      </div>
+      {expanded && (() => {
+        const d = days.find(x=>x.day===expanded);
+        if (!d) return null;
+        return (
+          <div className="mt-4 p-4 bg-slate-900/60 rounded-lg border border-slate-700 fade-in">
+            <div className="flex items-center justify-between mb-2">
+              <div className="flex items-center gap-2">
+                <span className="text-sm font-medium text-white">Day {d.day}</span>
+                <Badge color={typeColors[d.type]||'slate'}>{d.type}</Badge>
+              </div>
+              <Btn size="sm" variant="ghost" onClick={()=>copyText(d.post_text||d.post||'')}><Icon d={I.copy} size={12} />Copy</Btn>
+            </div>
+            {d.topic && <p className="text-xs text-cyan-400 mb-2">{d.topic}</p>}
+            <p className="text-sm text-slate-200 whitespace-pre-wrap">{d.post_text || d.post || 'No post today.'}</p>
+          </div>
+        );
+      })()}
+    </Card>
+  );
+};
+
+// ═════════════════════════════════════════════════════════════════════════════
+// TAB: LEAD INBOX
+// ═════════════════════════════════════════════════════════════════════════════
+const TabLeads = () => {
+  const [leads, setLeads] = useState([]);
+  const [stats, setStats] = useState(null);
+  const [selected, setSelected] = useState(null);
+  const [detail, setDetail] = useState(null);
+  const [reply, setReply] = useState('');
+  const [replyPage, setReplyPage] = useState('');
+  const [filter, setFilter] = useState('all');
+  const [sending, setSending] = useState(false);
+  const [scanning, setScanning] = useState(false);
+  const [clients, setClients] = useState([]);
+  const [aiReplies, setAiReplies] = useState([]);
+  const [generatingReplies, setGeneratingReplies] = useState(false);
+  const [aiProvider, setAiProvider] = useState(() => localStorage.getItem('kv_ai_provider') || 'openai');
+  const [anthropicKey, setAnthropicKey] = useState(() => localStorage.getItem('kv_anthropic_key') || '');
+  const [showKeyInput, setShowKeyInput] = useState(false);
+
+  const load = useCallback(async () => {
+    const [l, s, c] = await Promise.all([
+      api('/api/leads').catch(()=>({leads:[]})),
+      api('/api/leads/stats').catch(()=>null),
+      api('/api/clients').catch(()=>({clients:[]})),
+    ]);
+    setLeads(l.leads||[]); setStats(s); setClients(c.clients||[]);
+  }, []);
+
+  useEffect(() => { load(); }, [load]);
+
+  const loadDetail = async (id) => {
+    setSelected(id);
+    const d = await api(`/api/leads/${id}`).catch(()=>null);
+    setDetail(d);
+  };
+
+  const updateStatus = async (id, status) => {
+    await put(`/api/leads/${id}`, { status }).catch(e=>toast(e.message,'error'));
+    toast('Status updated'); load();
+    if (detail?.id === id) setDetail({...detail, status});
+  };
+
+  const sendReply = async () => {
+    if (!reply.trim() || !selected) return;
+    setSending(true);
+    try {
+      await post(`/api/leads/${selected}/message`, { lead_id:selected, message:reply, page_name:replyPage });
+      toast('Reply sent'); setReply('');
+      const d = await api(`/api/leads/${selected}`); setDetail(d);
+    } catch(e) {
+      let msg = '';
+      try { msg = typeof e.message === 'string' ? e.message : JSON.stringify(e); } catch { msg = 'Send failed'; }
+      if (msg.includes('valid ID') || msg.includes('recipient') || msg.includes('100')) {
+        toast('DM requires pages_messaging approval from Meta. Lead is saved — reply manually via Facebook.', 'error');
+      } else if (msg.includes('commenter ID') || msg.includes('No commenter')) {
+        toast('No Facebook ID on this lead — comment was made before Live Mode. Delete and rescan.', 'error');
+      } else {
+        toast(msg || 'Send failed', 'error');
+      }
+    }
+    finally { setSending(false); }
+  };
+
+  const generateReplies = async (lead) => {
+    setGeneratingReplies(true);
+    setAiReplies([]);
+    try {
+      const keyword = lead.trigger_keyword || 'INFO';
+      const page = lead.page_name || 'our page';
+      const industry = clients.find(c=>c.name===lead.page_name)?.industry || 'general';
+      const comment = lead.comment_text || '';
+
+      const systemPrompt = `You are a social media manager for ${page}, a ${industry} business. Generate exactly 3 short DM reply options for a lead who commented on a Facebook post. Return ONLY valid JSON array, no markdown, no explanation: [{"tone":"Warm","text":"reply here"},{"tone":"Direct","text":"reply here"},{"tone":"Value-first","text":"reply here"}]. Each reply: 2-3 sentences max. Sound human, helpful, not salesy.`;
+      const userPrompt = `Lead commented "${comment}" with trigger keyword "${keyword}" on our Facebook post. Write 3 DM reply options.`;
+
+      // Route through server — OpenAI uses .env key, Anthropic uses stored key
+      const r = await fetch('http://localhost:7861/api/generate/reply-suggestions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          system_prompt: systemPrompt,
+          user_prompt: userPrompt,
+          page_name: page,
+          industry: industry,
+          keyword: keyword,
+          comment: comment,
+          provider: aiProvider,
+          anthropic_key: aiProvider === 'anthropic' ? anthropicKey : '',
+        })
+      });
+      const data = await r.json();
+      if (data.error) throw new Error(data.error);
+      setAiReplies(data.replies || []);
+    } catch(e) { toast('Could not generate replies: ' + e.message, 'error'); }
+    finally { setGeneratingReplies(false); }
+  };
+
+  const scan = async () => {
+    setScanning(true);
+    try {
+      const r = await post('/api/leads/check-comments', { keywords: ['INFO','YES','FREE','QUOTE','JOIN'] });
+      toast(`Scan complete — ${r.new_leads || 0} new lead(s) found`);
+      load();
+      setScanning(false);
+    } catch(e) { toast(e.message,'error'); setScanning(false); }
+  };
+
+  const filtered = leads.filter(l => filter==='all' || l.status===filter);
+  const statusColor = { new:'cyan', contacted:'yellow', qualified:'green', closed:'slate', lost:'red' };
+
+  return (
+    <div className="space-y-4 fade-in">
+      {stats && (
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          <StatCard label="Total Leads" value={stats.total_leads||0} />
+          <StatCard label="New" value={stats.by_status?.new||0} color="text-cyan-400" />
+          <StatCard label="Qualified" value={stats.by_status?.qualified||0} color="text-emerald-400" />
+          <StatCard label="DMs Sent" value={stats.dm_sent||0} color="text-purple-400" />
+        </div>
+      )}
+      <div className="grid grid-cols-12 gap-5">
+        <div className="col-span-12 md:col-span-5">
+          <Card>
+            <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center gap-2">
+                <Select value={filter} onChange={e=>setFilter(e.target.value)} cls="!w-auto text-xs py-1">
+                  {['all','new','contacted','qualified','closed','lost'].map(s=>(
+                    <option key={s} value={s}>{s.charAt(0).toUpperCase()+s.slice(1)}</option>
+                  ))}
+                </Select>
+                <span className="text-xs text-slate-500">{filtered.length} leads</span>
+              </div>
+              <Btn size="sm" variant="ghost" onClick={scan} disabled={scanning}>{scanning?<Spinner/>:<Icon d={I.refresh} size={14} />}Scan</Btn>
+            </div>
+            <div className="space-y-2 max-h-96 overflow-y-auto">
+              {filtered.map(l => (
+                <div key={l.id} onClick={()=>loadDetail(l.id)}
+                  className={`p-3 rounded-lg cursor-pointer border transition-all ${selected===l.id?'bg-cyan-500/15 border-cyan-500/40':'border-slate-700/50 hover:bg-slate-700/30'}`}>
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="text-sm font-medium text-white">{l.commenter_name||'Unknown'}</span>
+                    <Badge color={statusColor[l.status]||'slate'}>{l.status}</Badge>
+                  </div>
+                  <p className="text-xs text-slate-400 truncate">{l.comment_text}</p>
+                  <div className="flex items-center gap-2 mt-1">
+                    {l.trigger_keyword && <Badge color="yellow">{l.trigger_keyword}</Badge>}
+                    <span className="text-xs text-slate-600">{l.ts?.slice(0,16)}</span>
+                  </div>
+                </div>
+              ))}
+              {!filtered.length && (
+                <div className="text-center py-8">
+                  <Icon d={I.inbox} size={32} cls="mx-auto mb-2 text-slate-600" />
+                  <p className="text-sm text-slate-500">No leads yet</p>
+                </div>
+              )}
+            </div>
+          </Card>
+        </div>
+        <div className="col-span-12 md:col-span-7">
+          {detail ? (
+            <div className="space-y-4">
+              <Card>
+                <div className="flex items-center justify-between mb-3">
+                  <div>
+                    <h3 className="text-sm font-semibold text-white">{detail.commenter_name||'Unknown'}</h3>
+                    {detail.phone && <p className="text-xs text-slate-400">{detail.phone}</p>}
+                  </div>
+                  <Badge color={statusColor[detail.status]||'slate'}>{detail.status}</Badge>
+                </div>
+                <div className="flex gap-2 flex-wrap">
+                  {['new','contacted','qualified','closed','lost'].map(s => (
+                    <Btn key={s} size="sm" variant={detail.status===s?'primary':'ghost'} onClick={()=>updateStatus(detail.id, s)}>{s}</Btn>
+                  ))}
+                </div>
+              </Card>
+              <Card>
+                <h4 className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-3">Conversation</h4>
+                <div className="space-y-2 max-h-40 overflow-y-auto mb-3">
+                  {detail.messages?.map((m,i) => (
+                    <div key={i} className={`p-2 rounded text-xs ${m.direction==='outbound'?'bg-cyan-900/30 text-cyan-200 ml-8':'bg-slate-700/50 text-slate-300'}`}>
+                      <span className="text-slate-500">[{m.channel}] </span>{m.message}
+                    </div>
+                  ))}
+                  {!detail.messages?.length && <p className="text-xs text-slate-500">No messages yet</p>}
+                </div>
+
+                {/* AI Reply Suggestions */}
+                <div className="mb-3 pb-3 border-b border-slate-700">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-xs font-medium text-slate-400">AI Reply Suggestions</span>
+                    <div className="flex items-center gap-2">
+                      <select value={aiProvider} onChange={e=>{
+                        setAiProvider(e.target.value);
+                        localStorage.setItem('kv_ai_provider', e.target.value);
+                        if(e.target.value==='anthropic' && !anthropicKey) setShowKeyInput(true);
+                      }} className="text-xs bg-slate-800 border border-slate-600 rounded px-2 py-1 text-slate-300">
+                        <option value="openai">OpenAI</option>
+                        <option value="anthropic">Anthropic</option>
+                      </select>
+                      <Btn size="sm" variant="ghost" onClick={()=>generateReplies(detail)} disabled={generatingReplies}>
+                        {generatingReplies ? <Spinner/> : <Icon d={I.sparkles} size={12} />}
+                        {generatingReplies ? 'Generating…' : 'Generate'}
+                      </Btn>
+                    </div>
+                  </div>
+                  {aiProvider==='anthropic' && (
+                    <div className="mb-2">
+                      {showKeyInput ? (
+                        <div className="flex gap-2 items-center">
+                          <input type="password" placeholder="sk-ant-..." value={anthropicKey}
+                            onChange={e=>setAnthropicKey(e.target.value)}
+                            className="flex-1 text-xs px-2 py-1 bg-slate-900 border border-slate-600 rounded text-white placeholder-slate-500" />
+                          <Btn size="sm" onClick={()=>{
+                            localStorage.setItem('kv_anthropic_key', anthropicKey);
+                            setShowKeyInput(false);
+                            toast('Anthropic key saved');
+                          }}>Save</Btn>
+                        </div>
+                      ) : (
+                        <div className="flex items-center gap-2">
+                          <Badge color={anthropicKey?'green':'red'}>{anthropicKey?'Anthropic key saved':'No key'}</Badge>
+                          <button onClick={()=>setShowKeyInput(true)} className="text-xs text-cyan-400 hover:underline">{anthropicKey?'Change':'Add key'}</button>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                  {aiReplies.length > 0 && (
+                    <div className="space-y-2">
+                      {aiReplies.map((r,i) => (
+                        <div key={i} className="p-2 bg-slate-900/60 rounded-lg border border-slate-700 cursor-pointer hover:border-cyan-500/50 transition-all"
+                          onClick={()=>setReply(r.text)}>
+                          <div className="flex items-center justify-between mb-1">
+                            <Badge color={i===0?'cyan':i===1?'green':'purple'}>{r.tone}</Badge>
+                            <span className="text-xs text-slate-500">click to use</span>
+                          </div>
+                          <p className="text-xs text-slate-300">{r.text}</p>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  {!aiReplies.length && !generatingReplies && (
+                    <p className="text-xs text-slate-600 italic">Click Generate for AI-crafted reply options based on this lead</p>
+                  )}
+                </div>
+
+                <div className="space-y-2">
+                  <Select value={replyPage} onChange={e=>setReplyPage(e.target.value)} cls="text-xs">
+                    <option value="">Select page to send from…</option>
+                    {clients.map(c=><option key={c.name} value={c.name}>{c.name}</option>)}
+                  </Select>
+                  <div className="flex gap-2">
+                    <Textarea value={reply} onChange={e=>setReply(e.target.value)} placeholder="Type a reply or click a suggestion above…" rows={2} cls="text-xs" />
+                    <Btn onClick={sendReply} disabled={sending||!reply.trim()||!replyPage} cls="self-end">{sending?<Spinner/>:<Icon d={I.send} size={14} />}</Btn>
+                  </div>
+                </div>
+              </Card>
+            </div>
+          ) : (
+            <Card cls="text-center py-16 text-slate-500">
+              <Icon d={I.inbox} size={40} cls="mx-auto mb-3 text-slate-600" />
+              <p className="text-sm">Select a lead to view details</p>
+            </Card>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// ═════════════════════════════════════════════════════════════════════════════
+// TAB: ACTIVITY
+// ═════════════════════════════════════════════════════════════════════════════
+const TabActivity = () => {
+  const [jobs, setJobs] = useState([]);
+  const [logs, setLogs] = useState([]);
+  const [diag, setDiag] = useState(null);
+  const [tab, setTab] = useState('jobs');
+
+  const load = useCallback(async () => {
+    const [j, l, d] = await Promise.all([
+      api('/api/jobs').catch(()=>({jobs:[]})),
+      api('/api/logs?limit=30').catch(()=>({logs:[]})),
+      api('/api/diagnose').catch(()=>null),
+    ]);
+    setJobs(j.jobs||[]); setLogs(l.logs||[]); setDiag(d);
+  }, []);
+
+  useEffect(() => { load(); const t = setInterval(load, 5000); return ()=>clearInterval(t); }, [load]);
+
+  return (
+    <div className="space-y-4 fade-in">
+      {diag && (
+        <Card cls={diag.overall_ok ? 'border-emerald-800 bg-emerald-900/20' : 'border-red-800 bg-red-900/20'}>
+          <div className="flex items-center gap-3">
+            <Icon d={diag.overall_ok?I.check:I.alert} size={16} cls={diag.overall_ok?'text-emerald-400':'text-red-400'} />
+            <span className="text-sm font-medium text-white">{diag.overall_ok ? 'System Ready' : 'Configuration Issues Detected'}</span>
+            <div className="flex gap-2 ml-auto flex-wrap">
+              <Badge color={diag.openai_key?'green':'red'}>{diag.openai_key?'OpenAI ✓':'OpenAI missing'}</Badge>
+              {diag.clients?.map((c,i)=>(
+                <Badge key={i} color={c.ready?'green':'red'}>{c.name}: {c.ready?'Ready':'Not ready'}</Badge>
+              ))}
+            </div>
+          </div>
+        </Card>
+      )}
+      <div className="flex gap-2">
+        {['jobs','logs'].map(t=>(
+          <Btn key={t} size="sm" variant={tab===t?'primary':'ghost'} onClick={()=>setTab(t)}>
+            {t.charAt(0).toUpperCase()+t.slice(1)}
+          </Btn>
+        ))}
+        <Btn size="sm" variant="ghost" onClick={load} cls="ml-auto"><Icon d={I.refresh} size={14} />Refresh</Btn>
+      </div>
+      {tab==='jobs' && (
+        <Card>
+          <div className="space-y-3">
+            {jobs.map(j=>(
+              <div key={j.id} className="p-3 bg-slate-900/50 rounded-lg border border-slate-700/50">
+                <div className="flex items-center justify-between mb-1">
+                  <span className="text-xs text-slate-400">{j.description}</span>
+                  <Badge color={j.status==='done'?'green':j.status==='error'?'red':'yellow'}>{j.status}</Badge>
+                </div>
+                <div className="text-xs text-slate-600">{j.started_at?.slice(0,19)}</div>
+                {j.results?.map((r,i)=>(
+                  <div key={i} className="text-xs mt-1">
+                    <span className={r.status==='success'?'text-emerald-400':'text-red-400'}>{r.status==='success'?'✓':'✗'}</span>
+                    <span className="text-slate-400 ml-1">{r.client}</span>
+                    {r.error && <span className="text-red-400 ml-2">{r.error}</span>}
+                    {r.fb_post_id && <span className="text-slate-600 ml-2">ID: {r.fb_post_id}</span>}
+                  </div>
+                ))}
+              </div>
+            ))}
+            {!jobs.length && <p className="text-sm text-slate-500 text-center py-8">No jobs yet.</p>}
+          </div>
+        </Card>
+      )}
+      {tab==='logs' && (
+        <Card>
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs">
+              <thead>
+                <tr className="text-slate-500 border-b border-slate-700">
+                  <th className="text-left pb-2">Time</th><th className="text-left pb-2">Client</th>
+                  <th className="text-left pb-2">Pillar</th><th className="text-left pb-2">Status</th>
+                  <th className="text-left pb-2">FB Post ID</th>
+                </tr>
+              </thead>
+              <tbody>
+                {logs.map((l,i)=>(
+                  <tr key={i} className="border-b border-slate-800 hover:bg-slate-700/20">
+                    <td className="py-1.5 text-slate-500">{l.ts?.slice(0,16)}</td>
+                    <td className="py-1.5 text-slate-300">{l.page_name}</td>
+                    <td className="py-1.5 text-slate-400 max-w-xs truncate">{l.pillar}</td>
+                    <td className="py-1.5"><Badge color={l.success?'green':'red'}>{l.success?'OK':'Fail'}</Badge></td>
+                    <td className="py-1.5 text-slate-600 font-mono">{l.fb_post_id?.slice(0,20)||'—'}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            {!logs.length && <p className="text-sm text-slate-500 text-center py-8">No logs yet</p>}
+          </div>
+        </Card>
+      )}
+    </div>
+  );
+};
+
+// ═════════════════════════════════════════════════════════════════════════════
+// TAB: ANALYTICS
+// ═════════════════════════════════════════════════════════════════════════════
+const TabAnalytics = () => {
+  const [data, setData] = useState(null);
+  const [loading, setLoading] = useState(true);
+  useEffect(() => {
+    api('/api/analytics/summary').then(d=>{setData(d);setLoading(false);}).catch(()=>setLoading(false));
+  }, []);
+  if (loading) return <div className="flex items-center justify-center h-64"><Spinner /></div>;
+  if (!data) return <Card cls="text-center py-16 text-slate-500">Could not load analytics</Card>;
+  const dowData = Object.entries(data.posts_by_day_of_week||{}).map(([label,count])=>({label,count}));
+  const pillarData = (data.top_pillars||[]).slice(0,8).map(p=>({label:p.pillar,count:p.count}));
+  return (
+    <div className="space-y-5 fade-in">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <StatCard label="Total Posts" value={data.total_posts} />
+        <StatCard label="Successful" value={data.successful_posts} color="text-emerald-400" />
+        <StatCard label="Success Rate" value={`${data.success_rate}%`} color={data.success_rate>90?'text-emerald-400':'text-yellow-400'} />
+        <StatCard label="This Week" value={data.posts_this_week} color="text-cyan-400" />
+      </div>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+        <Card><h3 className="text-sm font-semibold text-white mb-3">Posts by Day</h3><BarChart data={dowData} /></Card>
+        <Card>
+          <h3 className="text-sm font-semibold text-white mb-3">Posts by Client</h3>
+          <div className="space-y-2">
+            {data.posts_by_page?.map((p,i)=>(
+              <div key={i} className="flex items-center gap-3">
+                <div className="text-xs text-slate-300 w-32 truncate">{p.page}</div>
+                <div className="flex-1 bg-slate-700 rounded-full h-2">
+                  <div className="bg-cyan-500 h-2 rounded-full" style={{width:`${p.success_rate}%`}} />
+                </div>
+                <div className="text-xs text-slate-400 w-12 text-right">{p.total} posts</div>
+                <Badge color={p.success_rate>90?'green':'yellow'}>{p.success_rate}%</Badge>
+              </div>
+            ))}
+          </div>
+        </Card>
+        <Card><h3 className="text-sm font-semibold text-white mb-3">Top Pillars</h3><BarChart data={pillarData.map(p=>({label:p.label.slice(0,15),count:p.count}))} color="#a78bfa" /></Card>
+        <Card><h3 className="text-sm font-semibold text-white mb-3">Last 30 Days</h3>{data.posts_last_30_days?.length>1?<SparkLine data={data.posts_last_30_days.map(d=>d.count)} height={80} />:<p className="text-sm text-slate-500 py-6 text-center">No data</p>}</Card>
+      </div>
+    </div>
+  );
+};
+
+// ═════════════════════════════════════════════════════════════════════════════
+// TAB: SETTINGS
+// ═════════════════════════════════════════════════════════════════════════════
+const TabSettings = ({ wl, setWl }) => {
+  const [local, setLocal] = useState({...wl});
+  const save = () => { setWl(local); localStorage.setItem(WL_KEY, JSON.stringify(local)); toast('Settings saved'); };
+  return (
+    <div className="max-w-lg space-y-5 fade-in">
+      <Card>
+        <h3 className="text-sm font-semibold text-white mb-4">White Label Branding</h3>
+        <div className="space-y-4">
+          <div><Label>Platform Name</Label><Input value={local.name} onChange={e=>setLocal({...local,name:e.target.value})} /></div>
+          <div><Label>Logo Emoji</Label><Input value={local.logo} onChange={e=>setLocal({...local,logo:e.target.value})} cls="!w-24" /></div>
+          <div><Label>Subtitle</Label><Input value={local.subtitle} onChange={e=>setLocal({...local,subtitle:e.target.value})} /></div>
+          <div>
+            <Label>Accent Color</Label>
+            <div className="flex items-center gap-3">
+              <input type="color" value={local.color} onChange={e=>setLocal({...local,color:e.target.value})} className="w-10 h-10 rounded cursor-pointer border border-slate-600 bg-transparent" />
+              <Input value={local.color} onChange={e=>setLocal({...local,color:e.target.value})} cls="!w-32" />
+            </div>
+          </div>
+        </div>
+        <div className="flex gap-3 mt-5"><Btn onClick={save}>Save Branding</Btn><Btn variant="ghost" onClick={()=>setLocal({...DEFAULT_WL})}>Reset</Btn></div>
+      </Card>
+      <Card>
+        <h3 className="text-sm font-semibold text-white mb-3">Server Connection</h3>
+        <div className="flex items-center gap-2">
+          <code className="text-xs text-slate-400 bg-slate-900 px-3 py-2 rounded">{API}</code>
+          <Btn size="sm" variant="ghost" onClick={()=>api('/api/health').then(()=>toast('Connected')).catch(()=>toast('Cannot reach server','error'))}>Test</Btn>
+        </div>
+        <p className="text-xs text-slate-500 mt-2">Run: <code className="text-slate-400">py -m uvicorn server:app --port 7861 --reload</code></p>
+      </Card>
+    </div>
+  );
+};
+
+// ═════════════════════════════════════════════════════════════════════════════
+// MAIN APP
+// ═════════════════════════════════════════════════════════════════════════════
+const App = () => {
+  const [tab, setTab] = useState('dashboard');
+  const [serverOk, setServerOk] = useState(false);
+  const [wl, setWl] = useState(() => {
+    try { return JSON.parse(localStorage.getItem(WL_KEY)) || DEFAULT_WL; } catch { return DEFAULT_WL; }
+  });
+
+  useEffect(() => { document.documentElement.style.setProperty('--accent', wl.color); }, [wl.color]);
+
+  useEffect(() => {
+    const check = () => api('/api/health').then(()=>setServerOk(true)).catch(()=>setServerOk(false));
+    check();
+    const t = setInterval(check, 15000);
+    return ()=>clearInterval(t);
+  }, []);
+
+  const TABS = [
+    { id:'dashboard', label:'Dashboard',     icon:I.dash },
+    { id:'clients',   label:'Clients',       icon:I.clients },
+    { id:'studio',    label:'Content Studio',icon:I.studio },
+    { id:'leads',     label:'Lead Inbox',    icon:I.inbox },
+    { id:'activity',  label:'Activity',      icon:I.activity },
+    { id:'analytics', label:'Analytics',     icon:I.analytics },
+    { id:'settings',  label:'Settings',      icon:I.settings },
+  ];
+
+  return (
+    <div className="min-h-screen bg-slate-900">
+      <header className="border-b border-slate-700 bg-slate-900/80 backdrop-blur sticky top-0 z-40">
+        <div className="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 rounded-lg flex items-center justify-center text-lg" style={{background:wl.color+'22',border:`1px solid ${wl.color}44`}}>
+              {wl.logo}
+            </div>
+            <div>
+              <div className="text-base font-bold text-white leading-tight">{wl.name}</div>
+              <div className="text-xs" style={{color:wl.color+'bb'}}>{wl.subtitle}</div>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <div className={`w-2 h-2 rounded-full ${serverOk?'bg-emerald-400':'bg-red-500'}`} />
+            <span className="text-xs text-slate-500">{serverOk?'Server Online':'Server Offline'}</span>
+          </div>
+        </div>
+        <div className="max-w-7xl mx-auto px-4">
+          <nav className="flex gap-1 overflow-x-auto">
+            {TABS.map(t => (
+              <button key={t.id} onClick={()=>setTab(t.id)}
+                className={`flex items-center gap-1.5 px-3 py-2.5 text-xs font-medium whitespace-nowrap transition-all border-b-2 ${tab===t.id?'text-white':'text-slate-400 hover:text-slate-200 border-transparent'}`}
+                style={tab===t.id?{borderColor:wl.color,color:wl.color}:{}}>
+                <Icon d={t.icon} size={14} />
+                {t.label}
+              </button>
+            ))}
+          </nav>
+        </div>
+      </header>
+
+      <main className="max-w-7xl mx-auto px-4 py-6">
+        {tab==='dashboard' && <TabDashboard serverOk={serverOk} />}
+        {tab==='clients'   && <TabClients />}
+        {tab==='studio'    && <TabStudio />}
+        {tab==='leads'     && <TabLeads />}
+        {tab==='activity'  && <TabActivity />}
+        {tab==='analytics' && <TabAnalytics />}
+        {tab==='settings'  && <TabSettings wl={wl} setWl={setWl} />}
+      </main>
+    </div>
+  );
+};
+
+const root = ReactDOM.createRoot(document.getElementById('root'));
+root.render(<App />);
+</script>
+</body>
+</html>
